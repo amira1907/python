@@ -1,0 +1,179 @@
+import re
+from pytube import *
+from youtube_transcript_api import YouTubeTranscriptApi as yt
+from youtube_transcript_api.formatters import SRTFormatter
+import os
+import http.client
+
+ 
+ 
+def download_playlist( Link , Path , resolution_of_vedios , trans_per ) :
+   invalid_vedios=[]
+   playlist = Playlist( Link )   
+ 
+   DOWNLOAD_PATH = r'{}'.format( Path )
+ 
+   # playlist._video_regex = re.compile( r"\"url\":\"(/watch\?v=[\w-]*)" )  
+   playlist._video_regex = re.compile(r"^\$*\w+\W")
+   '''
+    This line sets a regular expression pattern on the playlist object. 
+    This pattern is used to extract the video URLs from the playlist HTML page. 
+    The regular expression looks for a string that starts with 
+    "url":" and is followed by a YouTube video ID (a string of letters, numbers, and hyphens). 
+    The re.compile() function creates a regular expression object from the pattern.
+   '''   
+ 
+   print( "\nI found {} vedios with URLs : ".format( len ( playlist.video_urls ) ) )  
+ 
+ 
+   for url in playlist.video_urls :
+        print ( url  )
+ 
+ 
+   for video in playlist.videos:
+        print ( '\ndownloading : {} with url : {}'.format( video.title , video.watch_url ) )
+ 
+      #! call the function that will get vedio id 
+        video_id = get_video_id(video.watch_url)
+ 
+      #! Change all characters that cannot be used in a file name to "_"
+        for i in ( '\\' , ':' , '*' , '\"' , '>' , '<' , '?' , '|' , ' ' ,  '^' , '.' ):
+            video.title = video.title.replace(i,"_")
+ 
+        #! call the function that will download translation cript
+        if trans_per == 'y':
+              download_transcript( video_id , DOWNLOAD_PATH , video.title )
+ 
+        try :
+ 
+          yt= YouTube(video.watch_url)
+          streams = yt.streams
+          #! if the resolution does not found so by defualt download with highest resolution
+          if not is_res_found( streams , resolution_of_vedios ):
+              resolution_of_vedios = yt.streams.get_highest_resolution()
+ 
+ 
+          #! download the vedio 
+          video.streams.\
+          filter( type = 'video' , progressive = True , file_extension = 'mp4' ,  res = resolution_of_vedios ).\
+          order_by( 'resolution' ).\
+          desc().\
+          first().\
+          download( DOWNLOAD_PATH )
+ 
+        except AttributeError:
+            invalid_vedios += str(video.watch_url)
+            continue
+        except http.client.IncompleteRead as e:
+            invalid_vedios += str(video.watch_url)
+            continue
+ 
+   print( '\n>>>>>>>>>>>>>>>>> completed <<<<<<<<<<<<<<<<<<<' )
+   return invalid_vedios
+ 
+ 
+ 
+ 
+ 
+ 
+#! to cheack if the resolution which user pass it is available or not       
+def is_res_found(streams , resolution_of_vedios):
+   bool=False
+   for stream in streams:
+     if stream.resolution == resolution_of_vedios:
+        bool =True
+        return bool
+   else:
+       bool =False
+       return bool
+ 
+ 
+ 
+ 
+def get_video_id(url):
+  video_id = url.split("=")[-1]
+  return video_id
+ 
+ 
+ 
+ 
+ 
+ 
+#! to download the translation script of the vedio 
+def download_transcript( video_id , trans_path , filename ):
+   transcript = yt.get_transcript( video_id , languages = ['en'] )
+   formatter = SRTFormatter()
+ 
+   STR_formatted = formatter.format_transcript( transcript )
+   new_file_name = trans_path+r"\{}.srt".format( filename )
+   old = trans_path + "\\aaa.srt"
+ 
+   filepath = os.path.join( trans_path , old )
+ 
+   with open( filepath , 'w', encoding = 'utf-8' ) as STR_file :
+       STR_file.write( STR_formatted )
+ 
+   os.rename(  old , new_file_name )
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+def download_sigle(Link , Path , resolution_of_vedios ):
+    yt = YouTube(Link)
+    streams = yt.streams
+    #! if the resolution does not found so by defualt download with highest resolution
+    if not is_res_found( streams , resolution_of_vedios ):
+        resolution_of_vedios = yt.streams.get_highest_resolution()
+ 
+    print ( '\ndownloading : {} with url : {}'.format( yt.title , yt.watch_url ) )
+    video_stream = yt.streams.filter( res = resolution_of_vedios , file_extension = 'mp4' ).first()
+    video_stream.download( Path )
+ 
+    print("Download complete!")
+ 
+ 
+ 
+ 
+def download_audio(link, download_path):
+    yt = YouTube(link)
+    streams = yt.streams
+    audio_streams = streams.filter(only_audio=True)
+    audio_stream = audio_streams[0]
+    audio_stream.download(download_path)
+ 
+ 
+ 
+ 
+ 
+ 
+if __name__ == "__main__":
+    choose1 = input(' What do you want \n 1 ) Download as audio \n 2 ) Download as vedios  \n Your Choose is : ')
+ 
+    if choose1 == '1':
+        link = input( " Enter the link of the video : " )
+        path = input( " Enter the path where the video will be downloaded : " )        
+        download_audio( link , path )
+ 
+    else:
+ 
+        choose = input(' What do you want \n 1 ) Download single video \n 2 ) Download Playlist  \n Your Choose is : ')
+ 
+        if choose == '1':
+            link = input( " Enter the link of the video : " )
+            path = input( " Enter the path where the video will be downloaded : " )
+            resolution_of_vedios = input( " Enter the resolution of the video you want to download (360p, 720p, 1080p ): " )
+            download_sigle( link , path , resolution_of_vedios )
+ 
+ 
+        elif choose == '2' : 
+           link = input( " Enter the link of the  playlist : " )
+           path = input( " Enter the path where the videos will be downloaded : " )
+           resolution_of_vedios = input( " Enter the resolution of the videos you want to download (360p, 720p, 1080p ): " )
+           Translation_permission = input( " Do you want to download the Translation script of the video  y / n ?  " )
+           invalid_vedios = download_playlist( link , path , resolution_of_vedios , Translation_permission )
+ 
+           if len ( invalid_vedios ) > 0:
+               print(' this is the URLS of vedios does not downloded ' , invalid_vedios)
